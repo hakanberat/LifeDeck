@@ -19,7 +19,7 @@
 }
 
 .converter-panel {
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 16px;
     padding: 30px;
@@ -41,7 +41,7 @@
     width: 100%;
     min-width: 0;
     padding: 13px;
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 9px;
     font: inherit;
@@ -70,7 +70,7 @@
 .swap-button {
     border: 1px solid var(--ld-border);
     border-radius: 9px;
-    background: #e7f4f1;
+    background: var(--ld-accent-soft);
     color: var(--ld-primary-dark);
     height: 48px;
     padding: 0 16px;
@@ -101,7 +101,7 @@ button:disabled {
 .conversion-result {
     margin-top: 30px;
     padding: 25px;
-    background: #e7f4f1;
+    background: var(--ld-accent-soft);
     border-radius: 12px;
 }
 
@@ -120,7 +120,7 @@ button:disabled {
 .rate-information {
     margin-top: 20px;
     padding-top: 15px;
-    border-top: 1px solid #b8dbd1;
+    border-top: 1px solid var(--ld-border);
 }
 
 .rate-information p {
@@ -134,7 +134,7 @@ button:disabled {
 }
 
 .currency-error {
-    color: #b42318;
+    color: var(--ld-danger);
     margin-top: 20px;
 }
 
@@ -161,3 +161,5 @@ button:disabled {
         width: 100%;
     }
 }
+
+

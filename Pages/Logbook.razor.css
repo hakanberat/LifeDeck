@@ -31,31 +31,8 @@
 
 .primary-btn,
 .secondary-btn,
-.delete-btn {
-    padding: 10px 18px;
-    border-radius: 9px;
-    border: none;
-    font: inherit;
-    cursor: pointer;
-}
-
-.primary-btn {
-    color: white;
-    background: var(--ld-primary);
-}
-
 .primary-btn:hover {
     background: var(--ld-primary-dark);
-}
-
-.secondary-btn {
-    background: #e7f4f1;
-    color: var(--ld-primary-dark);
-}
-
-.delete-btn {
-    background: #fce8e8;
-    color: #b42318;
 }
 
 button:disabled {
@@ -66,7 +43,7 @@ button:disabled {
 .dive-form,
 .dive-card,
 .empty-state {
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 14px;
     padding: 24px;
@@ -103,7 +80,7 @@ button:disabled {
     padding: 11px 13px;
     border: 1px solid var(--ld-border);
     border-radius: 8px;
-    background: white;
+    background: var(--ld-surface);
     font: inherit;
 }
 
@@ -196,7 +173,7 @@ button:disabled {
 }
 
 .error-message {
-    color: #b42318;
+    color: var(--ld-danger);
     margin-bottom: 16px;
 }
 
@@ -224,3 +201,5 @@ button:disabled {
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+

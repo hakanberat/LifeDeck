@@ -32,31 +32,8 @@
 
 .primary-btn,
 .secondary-btn,
-.delete-btn {
-    border: none;
-    border-radius: 9px;
-    padding: 10px 18px;
-    font: inherit;
-    cursor: pointer;
-}
-
-.primary-btn {
-    background: var(--ld-primary);
-    color: white;
-}
-
 .primary-btn:hover {
     background: var(--ld-primary-dark);
-}
-
-.secondary-btn {
-    background: #e7f4f1;
-    color: var(--ld-primary-dark);
-}
-
-.delete-btn {
-    background: #fce8e8;
-    color: #b42318;
 }
 
 button:disabled {
@@ -69,7 +46,7 @@ button:disabled {
 .blog-form {
     padding: 26px;
     margin-bottom: 28px;
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 14px;
 }
@@ -93,7 +70,7 @@ button:disabled {
     padding: 12px 14px;
     border: 1px solid var(--ld-border);
     border-radius: 9px;
-    background: white;
+    background: var(--ld-surface);
     font: inherit;
 }
 
@@ -138,7 +115,7 @@ button:disabled {
 
 .blog-card {
     padding: 28px;
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 14px;
 }
@@ -164,7 +141,7 @@ button:disabled {
 .post-tag {
     padding: 5px 11px;
     border-radius: 20px;
-    background: #e7f4f1;
+    background: var(--ld-accent-soft);
     color: var(--ld-primary-dark);
     font-size: 12px;
 }
@@ -203,7 +180,7 @@ button:disabled {
 .empty-state {
     padding: 50px 20px;
     text-align: center;
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 14px;
 }
@@ -214,7 +191,7 @@ button:disabled {
 }
 
 .error-message {
-    color: #b42318;
+    color: var(--ld-danger);
     margin-bottom: 18px;
 }
 
@@ -243,3 +220,5 @@ button:disabled {
         flex: 1;
     }
 }
+
+

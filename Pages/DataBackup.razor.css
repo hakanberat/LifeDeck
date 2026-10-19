@@ -19,7 +19,7 @@
 }
 
 .backup-card {
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 16px;
     padding: 28px;
@@ -43,8 +43,8 @@
 }
 
 .backup-modules span {
-    background: #e7f4f1;
-    color: #087f78;
+    background: var(--ld-accent-soft);
+    color: var(--ld-primary);
     border-radius: 20px;
     padding: 7px 12px;
     font-size: 13px;
@@ -72,11 +72,11 @@
 
 .backup-message {
     margin-top: 18px;
-    color: #15803d;
+    color: var(--ld-success);
 }
 
 .backup-message.error {
-    color: #b42318;
+    color: var(--ld-danger);
 }
 
 .backup-note {
@@ -99,7 +99,7 @@
 .restore-card {
     margin-top: 24px;
     padding: 28px;
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 16px;
 }
@@ -152,8 +152,8 @@
 .restore-warning {
     margin: 20px 0;
     padding: 15px;
-    background: #fff4e5;
-    color: #92400e;
+    background: var(--ld-warning-soft);
+    color: var(--ld-warning);
     border-radius: 9px;
     line-height: 1.6;
 }
@@ -162,7 +162,7 @@
     padding: 13px 20px;
     border: 0;
     border-radius: 9px;
-    background: #b42318;
+    background: var(--ld-danger);
     color: white;
     font: inherit;
     font-weight: 600;
@@ -176,12 +176,12 @@
 
 .restore-error {
     margin-top: 15px;
-    color: #b42318;
+    color: var(--ld-danger);
 }
 
 .restore-success {
     margin-top: 15px;
-    color: #15803d;
+    color: var(--ld-success);
 }
 
 @media (max-width: 600px) {
@@ -202,12 +202,12 @@
 }
 
 .export-secondary {
-    background: #e7f4f1;
-    color: #087f78;
+    background: var(--ld-accent-soft);
+    color: var(--ld-primary);
 }
 
 .export-secondary:hover:not(:disabled) {
-    background: #d3eae5;
+    background: var(--ld-hover);
 }
 
 @media (max-width: 600px) {
@@ -216,3 +216,5 @@
         align-items: stretch;
     }
 }
+
+

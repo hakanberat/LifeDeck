@@ -24,7 +24,7 @@
 
 .todo-count {
     color: var(--ld-primary);
-    background: #e7f4f1;
+    background: var(--ld-accent-soft);
     padding: 8px 14px;
     border-radius: 20px;
     font-size: 13px;
@@ -85,7 +85,7 @@
     padding: 16px 20px;
     border: 1px solid var(--ld-border);
     border-radius: 12px;
-    background: white;
+    background: var(--ld-surface);
 }
 
 .todo-task {
@@ -115,18 +115,18 @@
 }
 
 .todo-actions button {
-    background: #e7f4f1;
+    background: var(--ld-accent-soft);
     color: var(--ld-primary-dark);
 }
 
 .todo-actions .todo-delete {
-    background: #fce8e8;
-    color: #b42318;
+    background: var(--ld-danger-soft);
+    color: var(--ld-danger);
 }
 
 .todo-empty {
     text-align: center;
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 12px;
     padding: 48px 20px;
@@ -137,7 +137,7 @@
 }
 
 .todo-error {
-    color: #b42318;
+    color: var(--ld-danger);
     margin-bottom: 16px;
 }
 
@@ -164,3 +164,5 @@
         width: 100%;
     }
 }
+
+

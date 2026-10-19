@@ -64,16 +64,16 @@
     padding: 13px;
     border: 1px solid var(--ld-border);
     border-radius: 9px;
-    background: white;
+    background: var(--ld-surface);
     cursor: pointer;
 }
 
 .location-results button:hover:not(:disabled) {
-    background: #e7f4f1;
+    background: var(--ld-accent-soft);
 }
 
 .weather-result {
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 16px;
     padding: 28px;
@@ -115,7 +115,7 @@
 }
 
 .weather-error {
-    color: #b42318;
+    color: var(--ld-danger);
     margin-bottom: 18px;
 }
 
@@ -140,3 +140,5 @@
         grid-template-columns: 1fr;
     }
 }
+
+

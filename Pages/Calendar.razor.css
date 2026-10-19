@@ -38,21 +38,6 @@
     cursor: pointer;
 }
 
-.primary-btn {
-    background: var(--ld-primary);
-    color: white;
-}
-
-.secondary-btn {
-    background: #e7f4f1;
-    color: var(--ld-primary-dark);
-}
-
-.delete-btn {
-    background: #fce8e8;
-    color: #b42318;
-}
-
 button:disabled {
     opacity: .5;
     cursor: not-allowed;
@@ -61,7 +46,7 @@ button:disabled {
 .appointment-form,
 .calendar-panel,
 .appointment-card {
-    background: white;
+    background: var(--ld-surface);
     border: 1px solid var(--ld-border);
     border-radius: 14px;
     padding: 22px;
@@ -116,7 +101,7 @@ button:disabled {
 }
 
 .month-navigation button {
-    background: #e7f4f1;
+    background: var(--ld-accent-soft);
     color: var(--ld-primary);
 }
 
@@ -144,12 +129,12 @@ button:disabled {
     text-align: left;
     border: 1px solid var(--ld-border);
     border-radius: 8px;
-    background: white;
+    background: var(--ld-surface);
     cursor: pointer;
 }
 
 .calendar-day:hover {
-    background: #e7f4f1;
+    background: var(--ld-accent-soft);
 }
 
 .calendar-day.outside {
@@ -174,7 +159,7 @@ button:disabled {
 }
 
 .event-label {
-    background: #e7f4f1;
+    background: var(--ld-accent-soft);
     color: var(--ld-primary-dark);
     padding: 3px 5px;
     border-radius: 4px;
@@ -211,7 +196,7 @@ button:disabled {
 }
 
 .error-message {
-    color: #b42318;
+    color: var(--ld-danger);
     margin-bottom: 16px;
 }
 
@@ -243,3 +228,5 @@ button:disabled {
         font-size: 12px;
     }
 }
+
+

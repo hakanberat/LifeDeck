@@ -1,4 +1,4 @@
-﻿
+
 @page "/"
 @using LifeDeck.Services.Storage
 @inject BrowserStorageService Storage
@@ -9,11 +9,11 @@
 
     <header class="ld-dashboard-header">
         <div>
-            <h1>Dashboard</h1>
-            <p>Your personal workspace overview.</p>
+            <span class="ld-eyebrow">YOUR DAY, WITH CLARITY</span><h1>A space for everything.</h1>
+            <p>A clear view of the things that make up your life.</p>
         </div>
 
-        <time>@DateTime.Today.ToString("dd MMMM yyyy")</time>
+        <time datetime="@DateTime.Today.ToString("yyyy-MM-dd")">@DateTime.Today.ToString("dd MMMM yyyy")</time>
     </header>
 
     @if (isLoading)
@@ -29,22 +29,32 @@
         <div class="ld-stats">
             @foreach (var metric in Metrics)
             {
-                <article class="ld-stat-card">
+                <a class="ld-stat-card" href="@MetricPath(metric.Key)"><div class="ld-stat-top"><DeckIcon Name="@MetricPath(metric.Key)" /><span aria-hidden="true">&#8599;</span></div>
                     <span>@metric.Label</span>
 
                     <strong>
                         @counts[metric.Key]
                     </strong>
 
-                    <small>Total records</small>
-                </article>
+                    <small>Open @metric.Label.ToLowerInvariant() <span aria-hidden="true">&#8594;</span></small>
+                </a>
             }
         </div>
     }
 
+    <section class="ld-quick-section" aria-labelledby="quick-title">
+        <div class="ld-section-heading"><div><span class="ld-eyebrow">MAKE ROOM FOR WHAT MATTERS</span><h2 id="quick-title">Pick up where you need to.</h2></div><span>Everyday essentials</span></div>
+        <div class="ld-quick-grid">
+            <a href="todo"><DeckIcon Name="todo" /><div><strong>Clear your mind</strong><p>Capture a task. Take the next step.</p></div><DeckIcon /></a>
+            <a href="notebook"><DeckIcon Name="notebook" /><div><strong>Keep a thought</strong><p>A home for ideas worth remembering.</p></div><DeckIcon /></a>
+            <a href="calendar"><DeckIcon Name="calendar" /><div><strong>Make a little time</strong><p>See your calendar and plan ahead.</p></div><DeckIcon /></a>
+        </div>
+    </section>
+    <div class="ld-dashboard-note"><DeckIcon Name="backup" /><p>Your workspace records stay in this browser.</p><a href="backup">Manage backups &#8599;</a></div>
 </section>
 
 @code {
+    private static string MetricPath(string key) => key == StorageKeys.Dives ? "logbook" : key == StorageKeys.Todos ? "todo" : key == StorageKeys.Notes ? "notebook" : key == StorageKeys.Appointments ? "calendar" : key == StorageKeys.Transactions ? "account" : "blog";
     private bool isLoading = true;
     private string? errorMessage;
 
@@ -85,3 +95,5 @@
         }
     }
 }
+
+

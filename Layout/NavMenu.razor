@@ -1,38 +1,19 @@
-﻿
 <nav class="ld-nav" aria-label="Main navigation">
-
-    <NavLink class="ld-nav-item"
-             href=""
-             Match="NavLinkMatch.All">
-        Dashboard
-    </NavLink>
-
-    <div class="ld-nav-caption">
-        MODULES
-    </div>
-
-    @foreach (var module in Modules)
+    <NavLink class="ld-nav-item" href="" Match="NavLinkMatch.All" aria-label="Overview" title="Overview"><DeckIcon Name="dashboard" /><span>Overview</span></NavLink>
+    @foreach (var group in Groups)
     {
-        <NavLink class="ld-nav-item"
-                 href="@module.Path">
-            @module.Name
-        </NavLink>
+        <div class="ld-nav-caption">@group.Name</div>
+        @foreach (var module in group.Modules)
+        {
+            <NavLink class="ld-nav-item" href="@module.Path" title="@module.Name" aria-label="@module.Name"><DeckIcon Name="@module.Icon" /><span>@module.Name</span></NavLink>
+        }
     }
-
 </nav>
-
 @code {
-    private static readonly (string Path, string Name)[] Modules =
-    {
-        ("/logbook", "Logbook"),
-        ("/todo", "Todo"),
-        ("/notebook", "Notebook"),
-        ("/calendar", "Calendar"),
-        ("/weather", "Weather"),
-        ("/currency", "Currency"),
-        ("/calculator", "Calculator"),
-        ("/account", "Account"),
-        ("/blog", "Blog"),
-        ("/backup", "Data Backup")
+    private static readonly (string Name, (string Path, string Name, string Icon)[] Modules)[] Groups = {
+        ("Workspace", new[] { ("/todo", "Todo", "todo"), ("/notebook", "Notebook", "notebook"), ("/calendar", "Calendar", "calendar"), ("/blog", "Blog", "blog") }),
+        ("Everyday tools", new[] { ("/logbook", "Diving Logbook", "logbook"), ("/weather", "Weather", "weather"), ("/currency", "Currency Converter", "currency"), ("/calculator", "Calculator", "calculator"), ("/account", "Personal Account", "account") }),
+        ("Your data", new[] { ("/backup", "Data Backup", "backup") })
     };
 }
+
