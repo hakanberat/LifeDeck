@@ -1,0 +1,87 @@
+﻿
+@page "/"
+@using LifeDeck.Services.Storage
+@inject BrowserStorageService Storage
+
+<PageTitle>Dashboard | LifeDeck</PageTitle>
+
+<section class="ld-dashboard">
+
+    <header class="ld-dashboard-header">
+        <div>
+            <h1>Dashboard</h1>
+            <p>Your personal workspace overview.</p>
+        </div>
+
+        <time>@DateTime.Today.ToString("dd MMMM yyyy")</time>
+    </header>
+
+    @if (isLoading)
+    {
+        <p role="status">Loading your data...</p>
+    }
+    else if (errorMessage is not null)
+    {
+        <p role="alert">@errorMessage</p>
+    }
+    else
+    {
+        <div class="ld-stats">
+            @foreach (var metric in Metrics)
+            {
+                <article class="ld-stat-card">
+                    <span>@metric.Label</span>
+
+                    <strong>
+                        @counts[metric.Key]
+                    </strong>
+
+                    <small>Total records</small>
+                </article>
+            }
+        </div>
+    }
+
+</section>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    private readonly Dictionary<string, int> counts = new();
+
+    private static readonly (string Label, string Key)[] Metrics =
+    {
+        ("Dives", StorageKeys.Dives),
+        ("Tasks", StorageKeys.Todos),
+        ("Notes", StorageKeys.Notes),
+        ("Appointments", StorageKeys.Appointments),
+        ("Transactions", StorageKeys.Transactions),
+        ("Blog Posts", StorageKeys.BlogPosts)
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        try
+        {
+            foreach (var metric in Metrics)
+            {
+                counts[metric.Key] =
+                    await Storage.CountAsync(metric.Key);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to load dashboard data.";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,459 @@
+
+@page "/account"
+@using System.Globalization
+@using LifeDeck.Models
+@using LifeDeck.Services.Storage
+@using Microsoft.JSInterop
+@inject BrowserStorageService Storage
+@inject IJSRuntime JS
+
+<PageTitle>Personal Account | LifeDeck</PageTitle>
+
+<section class="account-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Personal Account</h1>
+            <p>Manage your income and expenses.</p>
+        </div>
+
+        <button type="button"
+                class="primary-btn"
+                disabled="@saving"
+                @onclick="BeginAdd">
+            Add Transaction
+        </button>
+    </header>
+
+    @if (errorMessage is not null)
+    {
+        <p class="error-message" role="alert">
+            @errorMessage
+        </p>
+    }
+
+    @if (loading)
+    {
+        <p role="status">Loading transactions...</p>
+    }
+    else
+    {
+        <div class="balance-grid">
+            @foreach (var currency in Currencies)
+            {
+                <article class="balance-card">
+                    <h2>@currency</h2>
+
+                    <strong>
+                        @(GetBalance(currency).ToString("N2", CultureInfo.InvariantCulture))
+                    </strong>
+
+                    <div class="balance-details">
+                        <p class="income">
+                            Income:
+                            @(GetTotal(currency, "Income").ToString("N2", CultureInfo.InvariantCulture))
+                        </p>
+
+                        <p class="expense">
+                            Expense:
+                            @(GetTotal(currency, "Expense").ToString("N2", CultureInfo.InvariantCulture))
+                        </p>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+
+    @if (formOpen)
+    {
+        <form class="transaction-form"
+              @onsubmit="SaveAsync"
+              @onsubmit:preventDefault>
+
+            <h2>
+                @(editingId is null ? "New Transaction" : "Edit Transaction")
+            </h2>
+
+            <div class="form-grid">
+
+                <label>
+                    Type
+                    <select @bind="draft.Type" disabled="@saving">
+                        <option value="Income">Income</option>
+                        <option value="Expense">Expense</option>
+                    </select>
+                </label>
+
+                <label>
+                    Date
+                    <input type="date"
+                           required
+                           disabled="@saving"
+                           @bind="draft.Date"
+                           @bind:format="yyyy-MM-dd" />
+                </label>
+
+                <label>
+                    Amount
+                    <input type="number"
+                           min="0.01"
+                           step="0.01"
+                           required
+                           disabled="@saving"
+                           @bind="draft.Amount" />
+                </label>
+
+                <label>
+                    Currency
+                    <select @bind="draft.Currency" disabled="@saving">
+                        @foreach (var currency in Currencies)
+                        {
+                            <option value="@currency">@currency</option>
+                        }
+                    </select>
+                </label>
+
+                <label>
+                    Category
+                    <input type="text"
+                           maxlength="100"
+                           required
+                           disabled="@saving"
+                           @bind="draft.Category" />
+                </label>
+
+                <label>
+                    Payment Method
+                    <select @bind="draft.PaymentMethod" disabled="@saving">
+                        <option value="Cash">Cash</option>
+                        <option value="Bank">Bank</option>
+                        <option value="Credit Card">Credit Card</option>
+                    </select>
+                </label>
+
+                <label class="full-width">
+                    Description
+                    <textarea rows="3"
+                              maxlength="1000"
+                              disabled="@saving"
+                              @bind="draft.Description"></textarea>
+                </label>
+
+            </div>
+
+            <div class="form-actions">
+                <button type="submit"
+                        class="primary-btn"
+                        disabled="@saving">
+                    @(saving ? "Saving..." : "Save Transaction")
+                </button>
+
+                <button type="button"
+                        class="secondary-btn"
+                        disabled="@saving"
+                        @onclick="CancelEdit">
+                    Cancel
+                </button>
+            </div>
+
+        </form>
+    }
+
+    <section class="transactions-section">
+
+        <h2>Transactions</h2>
+
+        <div class="transaction-toolbar">
+
+            <input type="search"
+                   placeholder="Search transactions..."
+                   aria-label="Search transactions"
+                   @bind="searchText"
+                   @bind:event="oninput" />
+
+            <select aria-label="Filter transaction type"
+                    @bind="typeFilter">
+                <option value="All">All Types</option>
+                <option value="Income">Income</option>
+                <option value="Expense">Expense</option>
+            </select>
+
+            <select aria-label="Filter currency"
+                    @bind="currencyFilter">
+                <option value="All">All Currencies</option>
+                @foreach (var currency in Currencies)
+                {
+                    <option value="@currency">@currency</option>
+                }
+            </select>
+
+        </div>
+
+        @if (!loading && FilteredTransactions.Count == 0)
+        {
+            <div class="empty-state">
+                <h3>No transactions found</h3>
+                <p>Add a transaction or change your filters.</p>
+            </div>
+        }
+        else if (!loading)
+        {
+            <div class="transaction-list">
+                @foreach (var entry in FilteredTransactions)
+                {
+                    <article class="transaction-card" @key="entry.Id">
+
+                        <div class="transaction-info">
+                            <h3>@entry.Category</h3>
+
+                            <p>@entry.Description</p>
+
+                            <small>
+                                @entry.Date.ToString("dd.MM.yyyy")
+                                · @entry.PaymentMethod
+                            </small>
+                        </div>
+
+                        <div class="transaction-right">
+
+                            <strong class="@(entry.Type == "Income" ? "income" : "expense")">
+                                @(entry.Type == "Income" ? "+" : "−")@(entry.Amount.ToString("N2", CultureInfo.InvariantCulture))
+                                @entry.Currency
+                            </strong>
+
+                            <div class="card-actions">
+
+                                <button type="button"
+                                        class="secondary-btn"
+                                        disabled="@saving"
+                                        @onclick="() => BeginEdit(entry)">
+                                    Edit
+                                </button>
+
+                                <button type="button"
+                                        class="delete-btn"
+                                        disabled="@saving"
+                                        @onclick="() => DeleteAsync(entry)">
+                                    Delete
+                                </button>
+
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+
+    </section>
+</section>
+
+@code {
+    private static readonly string[] Currencies =
+    {
+        "TRY", "USD", "EUR", "GBP"
+    };
+
+    private List<TransactionEntry> transactions = new();
+
+    private TransactionEntry draft = new();
+
+    private Guid? editingId;
+
+    private string searchText = string.Empty;
+    private string typeFilter = "All";
+    private string currencyFilter = "All";
+    private string? errorMessage;
+
+    private bool loading = true;
+    private bool saving;
+    private bool formOpen;
+
+    // Search, filter and sort
+    private List<TransactionEntry> FilteredTransactions =>
+        transactions
+            .Where(t =>
+                (typeFilter == "All" || t.Type == typeFilter) &&
+                (currencyFilter == "All" || t.Currency == currencyFilter) &&
+                (
+                    string.IsNullOrWhiteSpace(searchText) ||
+                    t.Category.Contains(
+                        searchText.Trim(),
+                        StringComparison.OrdinalIgnoreCase) ||
+                    t.Description.Contains(
+                        searchText.Trim(),
+                        StringComparison.OrdinalIgnoreCase) ||
+                    t.PaymentMethod.Contains(
+                        searchText.Trim(),
+                        StringComparison.OrdinalIgnoreCase)
+                )
+            )
+            .OrderByDescending(t => t.Date)
+            .ThenByDescending(t => t.CreatedAt)
+            .ToList();
+
+    // Calculate income or expenses for one currency
+    private decimal GetTotal(string currency, string type)
+    {
+        return transactions
+            .Where(t => t.Currency == currency && t.Type == type)
+            .Sum(t => t.Amount);
+    }
+
+    // Calculate balance for one currency
+    private decimal GetBalance(string currency)
+    {
+        return GetTotal(currency, "Income")
+             - GetTotal(currency, "Expense");
+    }
+
+    // Load records from localStorage
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            transactions =
+                await Storage.GetAsync<List<TransactionEntry>>(
+                    StorageKeys.Transactions) ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to load transactions.";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // Open new transaction form
+    private void BeginAdd()
+    {
+        draft = new TransactionEntry();
+        editingId = null;
+        errorMessage = null;
+        formOpen = true;
+    }
+
+    // Edit an existing transaction
+    private void BeginEdit(TransactionEntry entry)
+    {
+        draft = entry with { };
+        editingId = entry.Id;
+        errorMessage = null;
+        formOpen = true;
+    }
+
+    private void CancelEdit()
+    {
+        draft = new TransactionEntry();
+        editingId = null;
+        formOpen = false;
+        errorMessage = null;
+    }
+
+    // Create or update transaction
+    private async Task SaveAsync()
+    {
+        if (saving) return;
+
+        if (!new[] { "Income", "Expense" }.Contains(draft.Type) ||
+            !Currencies.Contains(draft.Currency) ||
+            !new[] { "Cash", "Bank", "Credit Card" }
+                .Contains(draft.PaymentMethod) ||
+            draft.Date == default ||
+            draft.Amount <= 0 ||
+            draft.Amount > 999999999999m ||
+            decimal.Round(draft.Amount, 2) != draft.Amount ||
+            string.IsNullOrWhiteSpace(draft.Category) ||
+            draft.Category.Trim().Length > 100 ||
+            draft.Description.Length > 1000)
+        {
+            errorMessage = "Please check the transaction details.";
+            return;
+        }
+
+        if (editingId.HasValue &&
+            !transactions.Any(t => t.Id == editingId.Value))
+        {
+            errorMessage = "Transaction not found.";
+            return;
+        }
+
+        saving = true;
+
+        try
+        {
+            var entry = draft with
+            {
+                Date = draft.Date.Date,
+                Category = draft.Category.Trim(),
+                Description = draft.Description.Trim()
+            };
+
+            var updated = editingId.HasValue
+                ? transactions.Select(t =>
+                    t.Id == editingId.Value ? entry : t).ToList()
+                : new List<TransactionEntry>(transactions) { entry };
+
+            await Storage.SetAsync(
+                StorageKeys.Transactions,
+                updated
+            );
+
+            transactions = updated;
+            CancelEdit();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to save transaction.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    // Delete transaction
+    private async Task DeleteAsync(TransactionEntry entry)
+    {
+        if (saving) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete this {entry.Type.ToLowerInvariant()} transaction?"
+        );
+
+        if (!confirmed) return;
+
+        saving = true;
+
+        try
+        {
+            var updated = transactions
+                .Where(t => t.Id != entry.Id)
+                .ToList();
+
+            await Storage.SetAsync(
+                StorageKeys.Transactions,
+                updated
+            );
+
+            transactions = updated;
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to delete transaction.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

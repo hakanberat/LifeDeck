@@ -1,0 +1,38 @@
+﻿
+<nav class="ld-nav" aria-label="Main navigation">
+
+    <NavLink class="ld-nav-item"
+             href=""
+             Match="NavLinkMatch.All">
+        Dashboard
+    </NavLink>
+
+    <div class="ld-nav-caption">
+        MODULES
+    </div>
+
+    @foreach (var module in Modules)
+    {
+        <NavLink class="ld-nav-item"
+                 href="@module.Path">
+            @module.Name
+        </NavLink>
+    }
+
+</nav>
+
+@code {
+    private static readonly (string Path, string Name)[] Modules =
+    {
+        ("/logbook", "Logbook"),
+        ("/todo", "Todo"),
+        ("/notebook", "Notebook"),
+        ("/calendar", "Calendar"),
+        ("/weather", "Weather"),
+        ("/currency", "Currency"),
+        ("/calculator", "Calculator"),
+        ("/account", "Account"),
+        ("/blog", "Blog"),
+        ("/backup", "Data Backup")
+    };
+}

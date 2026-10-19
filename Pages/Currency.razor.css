@@ -1,0 +1,163 @@
+
+.currency-page {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.currency-header {
+    margin-bottom: 28px;
+}
+
+.currency-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.currency-header p {
+    color: var(--ld-muted);
+    margin-top: 5px;
+}
+
+.converter-panel {
+    background: white;
+    border: 1px solid var(--ld-border);
+    border-radius: 16px;
+    padding: 30px;
+}
+
+.converter-panel form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.converter-panel label {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.converter-panel input,
+.converter-panel select {
+    width: 100%;
+    min-width: 0;
+    padding: 13px;
+    background: white;
+    border: 1px solid var(--ld-border);
+    border-radius: 9px;
+    font: inherit;
+}
+
+.converter-panel input:focus,
+.converter-panel select:focus {
+    outline: 2px solid var(--ld-primary);
+    outline-offset: 1px;
+}
+
+.currency-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: end;
+    gap: 15px;
+    margin-top: 12px;
+}
+
+.currency-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.swap-button {
+    border: 1px solid var(--ld-border);
+    border-radius: 9px;
+    background: #e7f4f1;
+    color: var(--ld-primary-dark);
+    height: 48px;
+    padding: 0 16px;
+    cursor: pointer;
+}
+
+.convert-button {
+    border: none;
+    border-radius: 9px;
+    padding: 14px;
+    background: var(--ld-primary);
+    color: white;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.convert-button:hover {
+    background: var(--ld-primary-dark);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.conversion-result {
+    margin-top: 30px;
+    padding: 25px;
+    background: #e7f4f1;
+    border-radius: 12px;
+}
+
+.conversion-result > p {
+    color: var(--ld-muted);
+    margin-bottom: 10px;
+}
+
+.conversion-result > strong {
+    display: block;
+    font-size: clamp(26px, 5vw, 38px);
+    color: var(--ld-primary-dark);
+    overflow-wrap: anywhere;
+}
+
+.rate-information {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #b8dbd1;
+}
+
+.rate-information p {
+    font-weight: 600;
+}
+
+.rate-information small {
+    display: block;
+    margin-top: 8px;
+    color: var(--ld-muted);
+}
+
+.currency-error {
+    color: #b42318;
+    margin-top: 20px;
+}
+
+.currency-footer {
+    margin-top: 25px;
+    font-size: 12px;
+    color: var(--ld-muted);
+}
+
+.currency-footer p {
+    margin-top: 8px;
+}
+
+@media (max-width: 600px) {
+    .converter-panel {
+        padding: 20px;
+    }
+
+    .currency-row {
+        grid-template-columns: 1fr;
+    }
+
+    .swap-button {
+        width: 100%;
+    }
+}

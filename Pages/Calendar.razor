@@ -1,0 +1,408 @@
+
+@page "/calendar"
+@using System.Globalization
+@using LifeDeck.Models
+@using LifeDeck.Services.Storage
+@using Microsoft.JSInterop
+@inject BrowserStorageService Storage
+@inject IJSRuntime JS
+
+<PageTitle>Calendar | LifeDeck</PageTitle>
+
+<section class="calendar-page">
+
+    <header class="page-header">
+        <div>
+            <h1>Calendar</h1>
+            <p>Manage your appointments and schedule.</p>
+        </div>
+
+        <button class="primary-btn"
+                @onclick="() => BeginCreate(DateTime.Today)">
+            New Appointment
+        </button>
+    </header>
+
+    @if (errorMessage is not null)
+    {
+        <p class="error-message" role="alert">@errorMessage</p>
+    }
+
+    @if (formOpen)
+    {
+        <form class="appointment-form"
+              @onsubmit="SaveAsync"
+              @onsubmit:preventDefault>
+
+            <h2>@(editingId is null ? "New Appointment" : "Edit Appointment")</h2>
+
+            <div class="form-grid">
+                <label>
+                    Title *
+                    <input type="text" required maxlength="150"
+                           @bind="draft.Title" />
+                </label>
+
+                <label>
+                    Date *
+                    <input type="date" required
+                           @bind="draft.Date"
+                           @bind:format="yyyy-MM-dd" />
+                </label>
+
+                
+<label>
+    Time *
+    <input type="time"
+           required
+           value="@draft.Time"
+           @onchange="OnTimeChanged" />
+</label>
+
+
+                <label>
+                    Duration (minutes) *
+                    <input type="number" min="1" max="1440"
+                           required @bind="draft.DurationMinutes" />
+                </label>
+
+                <label>
+                    Type
+                    <select @bind="draft.Type">
+                        <option value="Personal">Personal</option>
+                        <option value="Work">Work</option>
+                        <option value="Meeting">Meeting</option>
+                        <option value="Health">Health</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </label>
+
+                <label>
+                    Location
+                    <input type="text" maxlength="150"
+                           @bind="draft.Location" />
+                </label>
+
+                <label class="full-width">
+                    Description
+                    <textarea rows="3" maxlength="2000"
+                              @bind="draft.Description"></textarea>
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="primary-btn"
+                        disabled="@saving">
+                    @(saving ? "Saving..." : "Save Appointment")
+                </button>
+
+                <button type="button" class="secondary-btn"
+                        disabled="@saving" @onclick="CancelEdit">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    }
+
+    <div class="calendar-panel">
+
+        <div class="month-navigation">
+            <button type="button"
+                    aria-label="Previous month"
+                    @onclick="() => ChangeMonth(-1)">&#10094;</button>
+
+            <h2>@currentMonth.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</h2>
+
+            <button type="button"
+                    aria-label="Next month"
+                    @onclick="() => ChangeMonth(1)">&#10095;</button>
+        </div>
+
+        <div class="calendar-grid">
+            @foreach (var name in Weekdays)
+            {
+                <div class="weekday">@name</div>
+            }
+
+            @foreach (var day in CalendarDays)
+            {
+                var dayItems = GetDayAppointments(day);
+
+                <button type="button"
+                        @key="day"
+                        class="calendar-day @(day.Month == currentMonth.Month ? "" : "outside") @(day.Date == DateTime.Today ? "today" : "")"
+                        aria-label="@($"{day:dd MMMM yyyy}, {dayItems.Count} appointments")"
+                        @onclick="() => BeginCreate(day)">
+
+                    <span class="day-number">@day.Day</span>
+
+                    @foreach (var appointment in dayItems.Take(2))
+                    {
+                        <span class="event-label">
+                            @appointment.Time @appointment.Title
+                        </span>
+                    }
+
+                    @if (dayItems.Count > 2)
+                    {
+                        <span class="event-more">
+                            +@(dayItems.Count - 2) more
+                        </span>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+
+    <section class="upcoming-section">
+        <h2>All Appointments</h2>
+
+        @if (loading)
+        {
+            <p>Loading appointments...</p>
+        }
+        else if (AllAppointments.Count == 0)
+        {
+            <p>No upcoming appointments.</p>
+        }
+        else
+        {
+            @foreach (var item in AllAppointments)
+            {
+                <article class="appointment-card" @key="item.Id">
+                    <div>
+                        <h3>@item.Title</h3>
+                        <p>
+                            @item.Date.ToString("dd.MM.yyyy")
+                            · @item.Time
+                            · @item.DurationMinutes min
+                        </p>
+                        <p>@item.Type · @item.Location</p>
+
+                        @if (!string.IsNullOrWhiteSpace(item.Description))
+                        {
+                            <p>@item.Description</p>
+                        }
+                    </div>
+
+                    <div class="card-actions">
+                        <button class="secondary-btn"
+                                disabled="@saving"
+                                @onclick="() => BeginEdit(item)">
+                            Edit
+                        </button>
+
+                        <button class="delete-btn"
+                                disabled="@saving"
+                                @onclick="() => DeleteAsync(item)">
+                            Delete
+                        </button>
+                    </div>
+                </article>
+            }
+        }
+    </section>
+</section>
+
+@code {
+    private List<AppointmentEntry> appointments = new();
+    private AppointmentEntry draft = new();
+
+    private DateTime currentMonth =
+        new(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    private Guid? editingId;
+    private bool formOpen;
+    private bool loading = true;
+    private bool saving;
+    private string? errorMessage;
+
+    private static readonly string[] Weekdays =
+        { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+
+    private List<DateTime> CalendarDays
+    {
+        get
+        {
+            var first = new DateTime(
+                currentMonth.Year, currentMonth.Month, 1);
+
+            var offset = ((int)first.DayOfWeek + 6) % 7;
+            var start = first.AddDays(-offset);
+
+            var daysInMonth = DateTime.DaysInMonth(
+                first.Year, first.Month);
+
+            var total = ((offset + daysInMonth + 6) / 7) * 7;
+
+            return Enumerable.Range(0, total)
+                .Select(i => start.AddDays(i))
+                .ToList();
+        }
+    }
+
+    
+private List<AppointmentEntry> AllAppointments =>
+    appointments
+        .OrderByDescending(a => a.Date)
+        .ThenBy(a => a.Time)
+        .ToList();
+
+
+    private List<AppointmentEntry> GetDayAppointments(DateTime day) =>
+        appointments
+            .Where(a => a.Date.Date == day.Date)
+            .OrderBy(a => a.Time)
+            .ToList();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            appointments =
+                await Storage.GetAsync<List<AppointmentEntry>>(
+                    StorageKeys.Appointments) ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to load appointments.";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ChangeMonth(int offset)
+    {
+        currentMonth = currentMonth.AddMonths(offset);
+    }
+
+    private void BeginCreate(DateTime date)
+    {
+        draft = new AppointmentEntry { Date = date };
+        editingId = null;
+        errorMessage = null;
+        formOpen = true;
+    }
+
+    private void BeginEdit(AppointmentEntry item)
+    {
+        draft = item with { };
+        editingId = item.Id;
+        currentMonth = new DateTime(
+            item.Date.Year, item.Date.Month, 1);
+        errorMessage = null;
+        formOpen = true;
+    }
+
+    private void CancelEdit()
+    {
+        formOpen = false;
+        editingId = null;
+        draft = new AppointmentEntry();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (saving) return;
+
+        if (string.IsNullOrWhiteSpace(draft.Title) ||
+            draft.Title.Trim().Length > 150 ||
+            draft.Date == default ||
+            !TimeOnly.TryParseExact(
+                draft.Time,
+                "HH:mm",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out _) ||
+            draft.DurationMinutes < 1 ||
+            draft.DurationMinutes > 1440 ||
+            (draft.Location?.Length ?? 0) > 150 ||
+            (draft.Description?.Length ?? 0) > 2000)
+        {
+            errorMessage = "Please check the appointment details.";
+            return;
+        }
+
+        saving = true;
+
+        try
+        {
+            var entry = draft with
+            {
+                Title = draft.Title.Trim(),
+                Date = draft.Date.Date,
+                Location = draft.Location?.Trim() ?? "",
+                Description = draft.Description?.Trim() ?? ""
+            };
+
+            var updated = editingId.HasValue
+                ? appointments.Select(a =>
+                    a.Id == editingId.Value ? entry : a).ToList()
+                : new List<AppointmentEntry>(appointments) { entry };
+
+            await Storage.SetAsync(
+                StorageKeys.Appointments, updated);
+
+            appointments = updated;
+            currentMonth = new DateTime(
+                entry.Date.Year, entry.Date.Month, 1);
+
+            errorMessage = null;
+            CancelEdit();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to save appointment.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(AppointmentEntry item)
+    {
+        if (saving) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm", $"Delete appointment: {item.Title}?");
+
+        if (!confirmed) return;
+
+        saving = true;
+
+        try
+        {
+            var updated = appointments
+                .Where(a => a.Id != item.Id).ToList();
+
+            await Storage.SetAsync(
+                StorageKeys.Appointments, updated);
+
+            appointments = updated;
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to delete appointment.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+    
+private void OnTimeChanged(ChangeEventArgs e)
+{
+    draft.Time = e.Value?.ToString() ?? string.Empty;
+}
+
+}

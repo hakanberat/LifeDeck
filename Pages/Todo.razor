@@ -1,0 +1,253 @@
+
+@page "/todo"
+@using LifeDeck.Models
+@using LifeDeck.Services.Storage
+@using Microsoft.JSInterop
+@inject BrowserStorageService Storage
+@inject IJSRuntime JS
+
+<PageTitle>Todo List | LifeDeck</PageTitle>
+
+<section class="todo-page">
+
+    <header class="todo-header">
+        <div>
+            <h1>Todo List</h1>
+            <p>Organize your daily tasks.</p>
+        </div>
+
+        <span class="todo-count">
+            @items.Count(x => x.IsCompleted) / @items.Count completed
+        </span>
+    </header>
+
+    <form class="todo-form"
+          @onsubmit="AddAsync"
+          @onsubmit:preventDefault>
+
+        <input type="text"
+               placeholder="Enter a new task..."
+               aria-label="New task"
+               maxlength="200"
+               @bind="newText"
+               @bind:event="oninput" />
+
+        <button type="submit" disabled="@saving">
+            Add Task
+        </button>
+    </form>
+
+    @if (errorMessage is not null)
+    {
+        <p class="todo-error" role="alert">
+            @errorMessage
+        </p>
+    }
+
+    @if (loading)
+    {
+        <p>Loading tasks...</p>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="todo-empty">
+            <h3>No tasks yet</h3>
+            <p>Add your first task to get started.</p>
+        </div>
+    }
+    else
+    {
+        <div class="todo-list">
+            @foreach (var task in items.OrderByDescending(x => x.CreatedAt))
+            {
+                <article class="todo-item" @key="task.Id">
+
+                    @if (editingId == task.Id)
+                    {
+                        <input class="todo-edit-input"
+                               aria-label="Edit task"
+                               maxlength="200"
+                               @bind="editText"
+                               @bind:event="oninput" />
+
+                        <div class="todo-actions">
+                            <button type="button"
+                                    disabled="@saving"
+                                    @onclick="SaveEditAsync">
+                                Save
+                            </button>
+
+                            <button type="button"
+                                    @onclick="CancelEdit">
+                                Cancel
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <label class="todo-task">
+                            <input type="checkbox"
+                                   checked="@task.IsCompleted"
+                                   disabled="@saving"
+                                   @onchange="() => ToggleAsync(task)" />
+
+                            <span class="@(task.IsCompleted ? "completed" : "")">
+                                @task.Text
+                            </span>
+                        </label>
+
+                        <div class="todo-actions">
+                            <button type="button"
+                                    disabled="@saving"
+                                    @onclick="() => BeginEdit(task)">
+                                Edit
+                            </button>
+
+                            <button type="button"
+                                    class="todo-delete"
+                                    disabled="@saving"
+                                    @onclick="() => DeleteAsync(task)">
+                                Delete
+                            </button>
+                        </div>
+                    }
+
+                </article>
+            }
+        </div>
+    }
+
+</section>
+
+@code {
+    private List<TodoItem> items = new();
+    private string newText = string.Empty;
+    private string editText = string.Empty;
+    private Guid? editingId;
+
+    private bool loading = true;
+    private bool saving;
+    private string? errorMessage;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            items = await Storage.GetAsync<List<TodoItem>>(
+                StorageKeys.Todos) ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to load tasks.";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        var text = newText.Trim();
+
+        if (saving || text.Length == 0 || text.Length > 200)
+            return;
+
+        var updated = new List<TodoItem>(items)
+        {
+            new TodoItem { Text = text }
+        };
+
+        if (await SaveAsync(updated))
+            newText = string.Empty;
+    }
+
+    private async Task ToggleAsync(TodoItem task)
+    {
+        if (saving) return;
+
+        var updated = items.Select(x =>
+            x.Id == task.Id
+                ? x with { IsCompleted = !x.IsCompleted }
+                : x
+        ).ToList();
+
+        await SaveAsync(updated);
+    }
+
+    private void BeginEdit(TodoItem task)
+    {
+        editingId = task.Id;
+        editText = task.Text;
+    }
+
+    private void CancelEdit()
+    {
+        editingId = null;
+        editText = string.Empty;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        var text = editText.Trim();
+
+        if (saving || editingId is null ||
+            text.Length == 0 || text.Length > 200)
+            return;
+
+        var updated = items.Select(x =>
+            x.Id == editingId.Value
+                ? x with { Text = text }
+                : x
+        ).ToList();
+
+        if (await SaveAsync(updated))
+            CancelEdit();
+    }
+
+    private async Task DeleteAsync(TodoItem task)
+    {
+        if (saving) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete task: {task.Text}?"
+        );
+
+        if (!confirmed) return;
+
+        var updated = items
+            .Where(x => x.Id != task.Id)
+            .ToList();
+
+        await SaveAsync(updated);
+    }
+
+    private async Task<bool> SaveAsync(List<TodoItem> updated)
+    {
+        saving = true;
+
+        try
+        {
+            await Storage.SetAsync(StorageKeys.Todos, updated);
+
+            items = updated;
+            errorMessage = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to save tasks.";
+            return false;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

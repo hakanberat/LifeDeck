@@ -1,0 +1,465 @@
+
+@page "/backup"
+@page "/data-backup"
+
+@using LifeDeck.Models
+@using LifeDeck.Services.Backup
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+
+@inject BackupService BackupService
+@inject IJSRuntime JS
+
+<PageTitle>Data Backup | LifeDeck</PageTitle>
+
+<section class="backup-page">
+
+    <!-- PAGE HEADER -->
+
+    <header class="backup-header">
+        <h1>Data Backup</h1>
+        <p>Keep a copy of your personal LifeDeck data.</p>
+    </header>
+
+
+    <!-- EXPORT SECTION -->
+
+    <article class="backup-card">
+
+        <h2>Export Your Data</h2>
+
+        <p>
+            Export your saved records from all six LifeDeck
+            modules in JSON, TXT or Excel format.
+        </p>
+
+        <div class="backup-modules">
+            <span>Logbook</span>
+            <span>Todo</span>
+            <span>Notebook</span>
+            <span>Calendar</span>
+            <span>Personal Account</span>
+            <span>Blog</span>
+        </div>
+
+        <div class="export-actions">
+
+            <button type="button"
+                    class="backup-button"
+                    disabled="@(saving || restoreBusy)"
+                    @onclick="SaveBackupAsync">
+                @(saving ? "Preparing..." : "Save JSON Backup")
+            </button>
+
+            <button type="button"
+                    class="backup-button export-secondary"
+                    disabled="@(saving || restoreBusy)"
+                    @onclick="ExportTxtAsync">
+                Export TXT
+            </button>
+
+            <button type="button"
+                    class="backup-button export-secondary"
+                    disabled="@(saving || restoreBusy)"
+                    @onclick="ExportExcelAsync">
+                Export Excel
+            </button>
+
+        </div>
+
+        @if (message is not null)
+        {
+            <p class="backup-message @(hasError ? "error" : "")"
+               role="status">
+                @message
+            </p>
+        }
+
+    </article>
+
+
+    <!-- RESTORE SECTION -->
+
+    <article class="restore-card">
+
+        <h2>Restore Your Data</h2>
+
+        <p>
+            Select a LifeDeck JSON backup file.
+            The file will be checked before any data is replaced.
+        </p>
+
+        <div class="restore-file">
+
+            <InputFile OnChange="LoadBackupFileAsync"
+                       accept=".json,application/json"
+                       disabled="@(saving || restoreBusy)" />
+
+        </div>
+
+        @if (restoreBusy)
+        {
+            <p role="status">
+                Processing backup...
+            </p>
+        }
+
+        @if (restoreError is not null)
+        {
+            <p class="restore-error" role="alert">
+                @restoreError
+            </p>
+        }
+
+        @if (restoreMessage is not null)
+        {
+            <p class="restore-success" role="status">
+                @restoreMessage
+            </p>
+        }
+
+
+        <!-- BACKUP PREVIEW -->
+
+        @if (selectedBackup is not null)
+        {
+            <div class="restore-preview">
+
+                <h3>Backup Preview</h3>
+
+                <p>
+                    Created:
+                    @selectedBackup.CreatedAtUtc
+                        .ToLocalTime()
+                        .ToString("dd.MM.yyyy HH:mm")
+                </p>
+
+                <div class="restore-counts">
+
+                    <span>Logbook</span>
+                    <strong>
+                        @selectedBackup.Data["dives"].Count
+                    </strong>
+
+                    <span>Todo</span>
+                    <strong>
+                        @selectedBackup.Data["todos"].Count
+                    </strong>
+
+                    <span>Notebook</span>
+                    <strong>
+                        @selectedBackup.Data["notes"].Count
+                    </strong>
+
+                    <span>Calendar</span>
+                    <strong>
+                        @selectedBackup.Data["appointments"].Count
+                    </strong>
+
+                    <span>Personal Account</span>
+                    <strong>
+                        @selectedBackup.Data["transactions"].Count
+                    </strong>
+
+                    <span>Blog</span>
+                    <strong>
+                        @selectedBackup.Data["blogPosts"].Count
+                    </strong>
+
+                </div>
+
+
+                <!-- RESTORE WARNING -->
+
+                <p class="restore-warning">
+                    Warning: Restoring this backup will REPLACE
+                    all current records in these six modules.
+
+                    It will not merge records.
+
+                    Save your current data first if you
+                    want to keep it.
+                </p>
+
+
+                <!-- RESTORE BUTTON -->
+
+                <button type="button"
+                        class="restore-button"
+                        disabled="@(restoreBusy || saving)"
+                        @onclick="ConfirmRestoreAsync">
+                    Restore Backup (Replace Existing Data)
+                </button>
+
+            </div>
+        }
+
+    </article>
+
+
+    <!-- FOOTER -->
+
+    <p class="backup-note">
+        Your data stays in your browser unless you explicitly
+        export it. Keep your backup files in a safe location.
+    </p>
+
+</section>
+
+
+@code {
+
+    // ==================================================
+    // STATE
+    // ==================================================
+
+    private bool saving;
+    private bool hasError;
+
+    private string? message;
+
+    private LifeDeckBackup? selectedBackup;
+
+    private bool restoreBusy;
+
+    private string? restoreError;
+    private string? restoreMessage;
+
+    private const long MaxBackupFileSize =
+        8 * 1024 * 1024;
+
+
+    // ==================================================
+    // EXPORT JSON
+    // ==================================================
+
+    private Task SaveBackupAsync()
+    {
+        return ExportFileAsync(
+            BackupService.SaveJsonAsync);
+    }
+
+
+    // ==================================================
+    // EXPORT TXT
+    // ==================================================
+
+    private Task ExportTxtAsync()
+    {
+        return ExportFileAsync(
+            BackupService.SaveTxtAsync);
+    }
+
+
+    // ==================================================
+    // EXPORT EXCEL
+    // ==================================================
+
+    private Task ExportExcelAsync()
+    {
+        return ExportFileAsync(
+            BackupService.SaveExcelAsync);
+    }
+
+
+    // ==================================================
+    // COMMON EXPORT METHOD
+    // ==================================================
+
+    private async Task ExportFileAsync(
+        Func<Task<string>> exportOperation)
+    {
+        if (saving || restoreBusy)
+            return;
+
+        saving = true;
+        message = null;
+        hasError = false;
+
+        try
+        {
+            string result = await exportOperation();
+
+            message = result switch
+            {
+                "saved" =>
+                    "File saved successfully.",
+
+                "downloaded" =>
+                    "File download started. Check your Downloads folder.",
+
+                "cancelled" =>
+                    "Export cancelled.",
+
+                _ =>
+                    "Export operation finished."
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+
+            hasError = true;
+
+            message =
+                "Unable to export data. " +
+                "Your existing records were not changed.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+
+    // ==================================================
+    // LOAD JSON BACKUP
+    // ==================================================
+
+    private async Task LoadBackupFileAsync(
+        InputFileChangeEventArgs e)
+    {
+        if (restoreBusy || saving)
+            return;
+
+        restoreBusy = true;
+
+        selectedBackup = null;
+        restoreError = null;
+        restoreMessage = null;
+
+        try
+        {
+            var file = e.File;
+
+            // Check file extension.
+            if (!file.Name.EndsWith(
+                ".json",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    "Please select a JSON file.");
+            }
+
+            // Check file size.
+            if (file.Size > MaxBackupFileSize)
+            {
+                throw new InvalidDataException(
+                    "Backup file exceeds the 8 MB limit.");
+            }
+
+            // Read selected file.
+            await using var stream =
+                file.OpenReadStream(
+                    maxAllowedSize: MaxBackupFileSize);
+
+            using var reader =
+                new StreamReader(stream);
+
+            string json =
+                await reader.ReadToEndAsync();
+
+            // Validate without modifying stored data.
+            selectedBackup =
+                BackupService.ValidateBackup(json);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+
+            restoreError =
+                "Unable to open backup: " + ex.Message;
+        }
+        finally
+        {
+            restoreBusy = false;
+        }
+    }
+
+
+    // ==================================================
+    // CONFIRM AND RESTORE
+    // ==================================================
+
+    private async Task ConfirmRestoreAsync()
+    {
+        if (restoreBusy || saving ||
+            selectedBackup is null)
+        {
+            return;
+        }
+
+        // Ask user before replacing records.
+        bool confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            "Restore this LifeDeck backup?\n\n" +
+            "All existing Logbook, Todo, Notebook, Calendar, " +
+            "Personal Account and Blog records will be REPLACED.\n\n" +
+            "This action cannot be undone unless you have another backup."
+        );
+
+        if (!confirmed)
+            return;
+
+        restoreBusy = true;
+
+        restoreError = null;
+        restoreMessage = null;
+
+        try
+        {
+            string result =
+                await BackupService.RestoreAsync(
+                    selectedBackup);
+
+            switch (result)
+            {
+                case "restored":
+
+                    restoreMessage =
+                        "Backup restored successfully. " +
+                        "Open Dashboard to view your restored records.";
+
+                    selectedBackup = null;
+                    break;
+
+
+                case "failed":
+
+                    restoreError =
+                        "Restore failed. " +
+                        "Previous records were recovered.";
+                    break;
+
+
+                case "rollback-failed":
+
+                    restoreError =
+                        "Restore failed and some original records " +
+                        "could not be recovered. " +
+                        "Check your data and restore from " +
+                        "a safe backup.";
+                    break;
+
+
+                default:
+
+                    restoreError =
+                        "Unexpected restore result.";
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+
+            restoreError =
+                "Restore could not be completed. " +
+                "Your current data may need to be checked.";
+        }
+        finally
+        {
+            restoreBusy = false;
+        }
+    }
+}

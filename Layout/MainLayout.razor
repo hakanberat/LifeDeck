@@ -1,0 +1,30 @@
+﻿
+@inherits LayoutComponentBase
+
+<div class="ld-shell">
+
+    <aside class="ld-sidebar">
+        <div class="ld-brand">
+            <div class="ld-brand-logo">L</div>
+            <div>
+                <strong>LifeDeck</strong>
+                <small>Personal Workspace</small>
+            </div>
+        </div>
+
+        <NavMenu />
+    </aside>
+
+    <div class="ld-workspace">
+
+        <header class="ld-topbar">
+            <span>My Workspace</span>
+            <span class="ld-status">Local First</span>
+        </header>
+
+        <main class="ld-content">
+            @Body
+        </main>
+
+    </div>
+</div>
