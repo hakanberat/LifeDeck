@@ -1,0 +1,262 @@
+
+@page "/currency"
+@using System.Globalization
+@using LifeDeck.Services.Api
+@inject CurrencyService CurrencyService
+
+<PageTitle>Currency | LifeDeck</PageTitle>
+
+<section class="currency-page">
+
+    <header class="currency-header">
+        <h1>Currency Converter</h1>
+        <p>Convert currencies using real exchange rates.</p>
+    </header>
+
+    <div class="converter-panel">
+
+        <form @onsubmit="ConvertAsync"
+              @onsubmit:preventDefault>
+
+            <label for="currency-amount">
+                Amount
+            </label>
+
+            <input id="currency-amount"
+                   type="number"
+                   min="0"
+                   step="any"
+                   required
+                   disabled="@loading"
+                   @bind="amount"
+                   @bind:after="ClearResult" />
+
+            <div class="currency-row">
+
+                <div class="currency-field">
+                    <label for="from-currency">From</label>
+
+                    <select id="from-currency"
+                            disabled="@loading"
+                            @bind="fromCurrency"
+                            @bind:after="ClearResult">
+
+                        @foreach (var currency in Currencies)
+                        {
+                            <option value="@currency.Code">
+                                @currency.Code - @currency.Name
+                            </option>
+                        }
+
+                    </select>
+                </div>
+
+                <button type="button"
+                        class="swap-button"
+                        disabled="@loading"
+                        title="Swap currencies"
+                        @onclick="SwapAsync">
+                    Swap
+                </button>
+
+                <div class="currency-field">
+                    <label for="to-currency">To</label>
+
+                    <select id="to-currency"
+                            disabled="@loading"
+                            @bind="toCurrency"
+                            @bind:after="ClearResult">
+
+                        @foreach (var currency in Currencies)
+                        {
+                            <option value="@currency.Code">
+                                @currency.Code - @currency.Name
+                            </option>
+                        }
+
+                    </select>
+                </div>
+
+            </div>
+
+            <button type="submit"
+                    class="convert-button"
+                    disabled="@loading">
+
+                @(loading ? "Converting..." : "Convert")
+
+            </button>
+
+        </form>
+
+        @if (errorMessage is not null)
+        {
+            <p class="currency-error" role="alert">
+                @errorMessage
+            </p>
+        }
+
+        @if (convertedAmount.HasValue)
+        {
+            <div class="conversion-result"
+                 aria-live="polite">
+
+                <p>
+                    @amount.ToString("N2")
+                    @fromCurrency
+                    =
+                </p>
+
+                <strong>
+                    @convertedAmount.Value.ToString("N2")
+                    @toCurrency
+                </strong>
+
+                <div class="rate-information">
+
+                    <p>
+                        1 @fromCurrency =
+                        @exchangeRate.ToString(
+                            "0.########",
+                            CultureInfo.InvariantCulture)
+                        @toCurrency
+                    </p>
+
+                    @if (rateDate.HasValue)
+                    {
+                        <small>
+                            Rate date:
+                            @rateDate.Value.ToString("dd.MM.yyyy")
+                        </small>
+                    }
+                    else
+                    {
+                        <small>
+                            Same currency — no conversion required.
+                        </small>
+                    }
+
+                </div>
+
+            </div>
+        }
+
+    </div>
+
+    <footer class="currency-footer">
+        Exchange rates provided by
+        <a href="https://frankfurter.dev/"
+           target="_blank"
+           rel="noopener noreferrer">
+            Frankfurter API
+        </a>.
+
+        <p>
+            Reference rates are updated daily.
+            They may differ from bank and exchange office rates.
+        </p>
+    </footer>
+
+</section>
+
+@code {
+
+    // Supported currencies
+    private static readonly (string Code, string Name)[] Currencies =
+    {
+        ("TRY", "Turkish Lira"),
+        ("USD", "US Dollar"),
+        ("EUR", "Euro"),
+        ("GBP", "British Pound"),
+        ("CHF", "Swiss Franc"),
+        ("JPY", "Japanese Yen"),
+        ("CAD", "Canadian Dollar"),
+        ("AUD", "Australian Dollar")
+    };
+
+    // User input
+    private decimal amount = 100m;
+
+    private string fromCurrency = "USD";
+    private string toCurrency = "TRY";
+
+    // Exchange rate result
+    private decimal exchangeRate;
+    private decimal? convertedAmount;
+    private DateOnly? rateDate;
+
+    // UI state
+    private bool loading;
+    private string? errorMessage;
+
+    private async Task ConvertAsync()
+    {
+        if (loading)
+            return;
+
+        ClearResult();
+
+        if (amount < 0)
+        {
+            errorMessage = "Amount cannot be negative.";
+            return;
+        }
+
+        // Same currency: no API request necessary
+        if (fromCurrency == toCurrency)
+        {
+            exchangeRate = 1m;
+            convertedAmount = amount;
+            return;
+        }
+
+        loading = true;
+
+        try
+        {
+            // Get real exchange rate
+            var result = await CurrencyService.GetRateAsync(
+                fromCurrency,
+                toCurrency
+            );
+
+            exchangeRate = result.Rate;
+            rateDate = result.Date;
+
+            // Calculate converted amount
+            convertedAmount = Math.Round(
+                amount * exchangeRate,
+                2,
+                MidpointRounding.AwayFromZero
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+
+            errorMessage =
+                "Unable to retrieve exchange rates. Please try again.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SwapAsync()
+    {
+        // Swap selected currencies
+        (fromCurrency, toCurrency) =
+            (toCurrency, fromCurrency);
+
+        // Calculate the new conversion
+        await ConvertAsync();
+    }
+
+    private void ClearResult()
+    {
+        convertedAmount = null;
+        rateDate = null;
+        errorMessage = null;
+    }
+}

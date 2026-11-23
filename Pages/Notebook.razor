@@ -1,0 +1,328 @@
+
+@page "/notebook"
+@using LifeDeck.Models
+@using LifeDeck.Services.Storage
+@using Microsoft.JSInterop
+@inject BrowserStorageService Storage
+@inject IJSRuntime JS
+
+<PageTitle>Notebook | LifeDeck</PageTitle>
+
+<section class="notebook-page">
+
+    <header class="notebook-header">
+        <div>
+            <h1>Notebook</h1>
+            <p>Capture your thoughts and ideas.</p>
+        </div>
+
+        <button type="button"
+                class="primary-btn"
+                disabled="@saving"
+                @onclick="StartNewNote">
+            New Note
+        </button>
+    </header>
+
+    @if (errorMessage is not null)
+    {
+        <p class="error-message" role="alert">
+            @errorMessage
+        </p>
+    }
+
+    @if (formOpen)
+    {
+        <form class="note-form"
+              @onsubmit="SaveNoteAsync"
+              @onsubmit:preventDefault>
+
+            <h2>@(editingId is null ? "New Note" : "Edit Note")</h2>
+
+            <label for="note-title">Title</label>
+            <input id="note-title"
+                   type="text"
+                   maxlength="120"
+                   required
+                   @bind="title"
+                   @bind:event="oninput" />
+
+            <label for="note-content">Content</label>
+            <textarea id="note-content"
+                      rows="10"
+                      maxlength="20000"
+                      @bind="content"
+                      @bind:event="oninput"></textarea>
+
+            <div class="form-actions">
+                <button type="submit"
+                        class="primary-btn"
+                        disabled="@saving">
+                    @(saving ? "Saving..." : "Save Note")
+                </button>
+
+                <button type="button"
+                        class="secondary-btn"
+                        disabled="@saving"
+                        @onclick="CancelEdit">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    }
+
+    <div class="notebook-toolbar">
+        <input type="search"
+               placeholder="Search notes..."
+               aria-label="Search notes"
+               @bind="searchText"
+               @bind:event="oninput" />
+
+        <span>@FilteredNotes.Count note(s)</span>
+    </div>
+
+    @if (loading)
+    {
+        <p>Loading notes...</p>
+    }
+    else if (FilteredNotes.Count == 0)
+    {
+        <div class="empty-state">
+            <h3>No notes found</h3>
+            <p>Create a note or change your search.</p>
+        </div>
+    }
+    else
+    {
+        <div class="notes-grid">
+            @foreach (var note in FilteredNotes)
+            {
+                <article class="note-card" @key="note.Id">
+
+                    <h2>@note.Title</h2>
+
+                    <p class="note-preview">
+                        @GetPreview(note.Content)
+                    </p>
+
+                    <small>
+                        Updated:
+                        @note.UpdatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                    </small>
+
+                    <div class="note-actions">
+                        <button type="button"
+                                class="secondary-btn"
+                                disabled="@saving"
+                                @onclick="() => StartEdit(note)">
+                            Edit
+                        </button>
+
+                        <button type="button"
+                                class="delete-btn"
+                                disabled="@saving"
+                                @onclick="() => DeleteNoteAsync(note)">
+                            Delete
+                        </button>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+
+</section>
+
+@code {
+    private List<NoteEntry> notes = new();
+
+    private string title = string.Empty;
+    private string content = string.Empty;
+    private string searchText = string.Empty;
+
+    private Guid? editingId;
+
+    private bool formOpen;
+    private bool loading = true;
+    private bool saving;
+
+    private string? errorMessage;
+
+    // Filter and sort notes
+    private List<NoteEntry> FilteredNotes =>
+        notes
+            .Where(note =>
+                string.IsNullOrWhiteSpace(searchText) ||
+                note.Title.Contains(
+                    searchText.Trim(),
+                    StringComparison.OrdinalIgnoreCase) ||
+                note.Content.Contains(
+                    searchText.Trim(),
+                    StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(note => note.UpdatedAt)
+            .ToList();
+
+    // Load notes from localStorage
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            notes = await Storage.GetAsync<List<NoteEntry>>(
+                StorageKeys.Notes) ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to load notes.";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // Create a new note
+    private void StartNewNote()
+    {
+        editingId = null;
+        title = string.Empty;
+        content = string.Empty;
+        errorMessage = null;
+        formOpen = true;
+    }
+
+    // Open an existing note for editing
+    private void StartEdit(NoteEntry note)
+    {
+        editingId = note.Id;
+        title = note.Title;
+        content = note.Content;
+        errorMessage = null;
+        formOpen = true;
+    }
+
+    private void CancelEdit()
+    {
+        editingId = null;
+        title = string.Empty;
+        content = string.Empty;
+        formOpen = false;
+    }
+
+    // Save a new or edited note
+    private async Task SaveNoteAsync()
+    {
+        if (saving) return;
+
+        var cleanTitle = title.Trim();
+        var cleanContent = content.Trim();
+
+        if (cleanTitle.Length == 0 ||
+            cleanTitle.Length > 120 ||
+            cleanContent.Length > 20000)
+        {
+            errorMessage = "Please check the note details.";
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        var existing = editingId is Guid id
+            ? notes.FirstOrDefault(n => n.Id == id)
+            : null;
+
+        if (editingId.HasValue && existing is null)
+        {
+            errorMessage = "Note not found.";
+            return;
+        }
+
+        NoteEntry entry = existing is null
+            ? new NoteEntry
+            {
+                Title = cleanTitle,
+                Content = cleanContent,
+                UpdatedAt = now
+            }
+            : existing with
+            {
+                Title = cleanTitle,
+                Content = cleanContent,
+                UpdatedAt = now
+            };
+
+        var updated = existing is null
+            ? new List<NoteEntry>(notes) { entry }
+            : notes.Select(n =>
+                n.Id == entry.Id ? entry : n).ToList();
+
+        if (await PersistAsync(updated))
+            CancelEdit();
+    }
+
+    // Delete a note
+    private async Task DeleteNoteAsync(NoteEntry note)
+    {
+        if (saving) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete note: {note.Title}?"
+        );
+
+        if (!confirmed) return;
+
+        var updated = notes
+            .Where(n => n.Id != note.Id)
+            .ToList();
+
+        if (await PersistAsync(updated) &&
+            editingId == note.Id)
+        {
+            CancelEdit();
+        }
+    }
+
+    // Save records to localStorage
+    private async Task<bool> PersistAsync(List<NoteEntry> updated)
+    {
+        saving = true;
+
+        try
+        {
+            await Storage.SetAsync(StorageKeys.Notes, updated);
+
+            notes = updated;
+            errorMessage = null;
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to save notes.";
+            return false;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    // Prepare a short preview for the note card
+    private static string GetPreview(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return "No content.";
+
+        var preview = text
+            .Replace("\r", " ")
+            .Replace("\n", " ");
+
+        return preview.Length > 160
+            ? preview[..160] + "..."
+            : preview;
+    }
+}

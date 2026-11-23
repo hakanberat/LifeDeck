@@ -1,0 +1,461 @@
+
+@page "/logbook"
+@using LifeDeck.Models
+@using LifeDeck.Services.Storage
+@using Microsoft.JSInterop
+@inject BrowserStorageService Storage
+@inject IJSRuntime JS
+
+<PageTitle>Logbook | LifeDeck</PageTitle>
+
+<section class="logbook-page">
+
+    <header class="logbook-header">
+        <div>
+            <h1>Diving Logbook</h1>
+            <p>Record and manage your diving history.</p>
+        </div>
+
+        <button class="primary-btn"
+                @onclick="BeginAdd">
+            Add Dive
+        </button>
+    </header>
+
+    @if (errorMessage is not null)
+    {
+        <p class="error-message" role="alert">
+            @errorMessage
+        </p>
+    }
+
+    @if (formOpen)
+    {
+        <form class="dive-form"
+              @onsubmit="SaveAsync"
+              @onsubmit:preventDefault>
+
+            <h2>@(editingId is null ? "New Dive" : "Edit Dive")</h2>
+
+            <div class="form-grid">
+
+                <label>
+                    Date *
+                    <input type="date"
+                           required
+                           @bind="draft.Date"
+                           @bind:format="yyyy-MM-dd" />
+                </label>
+
+                <label>
+                    Location *
+                    <input type="text"
+                           maxlength="150"
+                           required
+                           @bind="draft.Location" />
+                </label>
+
+                <label>
+                    Dive Site *
+                    <input type="text"
+                           maxlength="150"
+                           required
+                           @bind="draft.DiveSite" />
+                </label>
+
+                <label>
+                    Max Depth (m) *
+                    <input type="number"
+                           min="0.1"
+                           step="0.1"
+                           required
+                           @bind="draft.MaxDepthMeters" />
+                </label>
+
+                <label>
+                    Bottom Time (min)
+                    <input type="number"
+                           min="1"
+                           step="1"
+                           @bind="draft.BottomTimeMinutes" />
+                </label>
+
+                <label>
+                    Dive Type
+                    <select @bind="draft.DiveType">
+                        <option value="Recreational">Recreational</option>
+                        <option value="Training">Training</option>
+                        <option value="Night">Night</option>
+                        <option value="Wreck">Wreck</option>
+                        <option value="Technical">Technical</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </label>
+
+                <label>
+                    Tank
+                    <input type="text"
+                           maxlength="100"
+                           @bind="draft.Tank" />
+                </label>
+
+                <label>
+                    Suit Type
+                    <select @bind="draft.SuitType">
+                        <option value="None">None</option>
+                        <option value="Wetsuit">Wetsuit</option>
+                        <option value="Drysuit">Drysuit</option>
+                    </select>
+                </label>
+
+                <label>
+                    Suit Length
+                    <select @bind="draft.SuitLength">
+                        <option value="">Not specified</option>
+                        <option value="Shorty">Shorty</option>
+                        <option value="Full">Full</option>
+                    </select>
+                </label>
+
+                <label>
+                    Suit Thickness (mm)
+                    <input type="number"
+                           min="0"
+                           step="0.5"
+                           @bind="draft.SuitThicknessMm" />
+                </label>
+
+                <label>
+                    Weight (kg)
+                    <input type="number"
+                           min="0"
+                           step="0.5"
+                           @bind="draft.WeightKg" />
+                </label>
+
+                <label>
+                    Buddy
+                    <input type="text"
+                           maxlength="150"
+                           @bind="draft.Buddy" />
+                </label>
+
+                <label class="full-width">
+                    Notes
+                    <textarea rows="4"
+                              maxlength="3000"
+                              @bind="draft.Notes"></textarea>
+                </label>
+
+            </div>
+
+            <div class="form-actions">
+                <button type="submit"
+                        class="primary-btn"
+                        disabled="@saving">
+                    @(editingId is null ? "Save Dive" : "Update Dive")
+                </button>
+
+                <button type="button"
+                        class="secondary-btn"
+                        disabled="@saving"
+                        @onclick="CancelEdit">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    }
+
+    <div class="logbook-toolbar">
+        
+<input
+    type="search"
+    placeholder="Search dives..."
+    aria-label="Search dives"
+    value="@searchText"
+    @oninput="OnSearchInput" />
+
+
+        <span>@filteredDives.Count dive(s)</span>
+    </div>
+
+    @if (loading)
+    {
+        <p>Loading dives...</p>
+    }
+    else if (filteredDives.Count == 0)
+    {
+        <div class="empty-state">
+            <h3>No dives found</h3>
+            <p>Your dive records will appear here.</p>
+        </div>
+    }
+    else
+    {
+        <div class="dive-list">
+            @foreach (var dive in filteredDives)
+            {
+                <article class="dive-card" @key="dive.Id">
+
+                    <div class="dive-card-header">
+                        <div>
+                            <h3>@dive.DiveSite</h3>
+                            <p>@dive.Location</p>
+                        </div>
+
+                        <span>@dive.Date.ToString("dd.MM.yyyy")</span>
+                    </div>
+
+                    <div class="dive-details">
+                        <div>
+                            <small>Max Depth</small>
+                            <strong>@dive.MaxDepthMeters m</strong>
+                        </div>
+
+                        <div>
+                            <small>Bottom Time</small>
+                            <strong>@(dive.BottomTimeMinutes?.ToString() ?? "—") min</strong>
+                        </div>
+
+                        <div>
+                            <small>Type</small>
+                            <strong>@dive.DiveType</strong>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(dive.Buddy))
+                    {
+                        <p class="dive-extra">
+                            Buddy: @dive.Buddy
+                        </p>
+                    }
+
+                    <div class="card-actions">
+                        <button class="secondary-btn"
+                                disabled="@saving"
+                                @onclick="() => BeginEdit(dive)">
+                            Edit
+                        </button>
+
+                        <button class="delete-btn"
+                                disabled="@saving"
+                                @onclick="() => DeleteAsync(dive)">
+                            Delete
+                        </button>
+                    </div>
+
+                </article>
+            }
+        </div>
+    }
+
+</section>
+
+@code {
+    private List<DiveEntry> dives = new();
+    private List<DiveEntry> filteredDives = new();
+
+    private DiveEntry draft = new();
+
+    private Guid? editingId;
+    private string searchText = string.Empty;
+    private string? errorMessage;
+
+    private bool loading = true;
+    private bool saving;
+    private bool formOpen;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            dives = await Storage.GetAsync<List<DiveEntry>>(
+                StorageKeys.Dives) ?? new();
+
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to load dives.";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void BeginAdd()
+    {
+        draft = new DiveEntry();
+        editingId = null;
+        errorMessage = null;
+        formOpen = true;
+    }
+
+    private void BeginEdit(DiveEntry dive)
+    {
+        draft = dive with { };
+        editingId = dive.Id;
+        errorMessage = null;
+        formOpen = true;
+    }
+
+    private void CancelEdit()
+    {
+        draft = new DiveEntry();
+        editingId = null;
+        errorMessage = null;
+        formOpen = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (saving) return;
+
+        if (string.IsNullOrWhiteSpace(draft.Location) ||
+            string.IsNullOrWhiteSpace(draft.DiveSite) ||
+            draft.Location.Length > 150 ||
+            draft.DiveSite.Length > 150 ||
+            draft.Date.Date > DateTime.Today ||
+            draft.MaxDepthMeters <= 0 ||
+            (draft.BottomTimeMinutes.HasValue &&
+             draft.BottomTimeMinutes.Value <= 0) ||
+            draft.SuitThicknessMm < 0 ||
+            draft.WeightKg < 0 ||
+            draft.Notes.Length > 3000)
+        {
+            errorMessage = "Please check the dive details.";
+            return;
+        }
+
+        saving = true;
+
+        try
+        {
+            var entry = draft with
+            {
+                Location = draft.Location.Trim(),
+                DiveSite = draft.DiveSite.Trim(),
+                Buddy = draft.Buddy.Trim(),
+                Notes = draft.Notes.Trim()
+            };
+
+            List<DiveEntry> updated;
+
+            if (editingId.HasValue)
+            {
+                updated = dives.Select(x =>
+                    x.Id == editingId.Value ? entry : x
+                ).ToList();
+            }
+            else
+            {
+                updated = new List<DiveEntry>(dives) { entry };
+            }
+
+            await Storage.SetAsync(StorageKeys.Dives, updated);
+
+            dives = updated;
+            CancelEdit();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to save dive.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(DiveEntry dive)
+    {
+        if (saving) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete dive at {dive.DiveSite}?"
+        );
+
+        if (!confirmed) return;
+
+        saving = true;
+
+        try
+        {
+            var updated = dives
+                .Where(x => x.Id != dive.Id)
+                .ToList();
+
+            await Storage.SetAsync(StorageKeys.Dives, updated);
+
+            dives = updated;
+            errorMessage = null;
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to delete dive.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+   
+private void ApplyFilter()
+{
+    // Arama metninin başındaki ve sonundaki boşlukları kaldır.
+    var query = searchText.Trim();
+
+    // Kayıtlı dalışlar arasından arama yap.
+    filteredDives = dives
+        .Where(dive =>
+
+            // Arama kutusu boşsa bütün dalışları göster.
+            string.IsNullOrWhiteSpace(query)
+
+            // Lokasyon adında arama yap.
+            || dive.Location.Contains(
+                query,
+                StringComparison.OrdinalIgnoreCase)
+
+            // Dalış noktasının adında arama yap.
+            || dive.DiveSite.Contains(
+                query,
+                StringComparison.OrdinalIgnoreCase)
+
+            // Buddy adında arama yap.
+            || dive.Buddy.Contains(
+                query,
+                StringComparison.OrdinalIgnoreCase)
+        )
+
+        // Dalışları en yeni tarihten eskiye doğru sırala.
+        .OrderByDescending(dive => dive.Date)
+
+        // Filtrelenen kayıtları listeye dönüştür.
+        .ToList();
+}
+
+
+   
+    
+private void OnSearchInput(ChangeEventArgs e)
+{
+    // 1. Kullanıcının arama kutusuna yazdığı metni al.
+    searchText = e.Value?.ToString() ?? string.Empty;
+
+    // 2. Dalış listesini yeni arama metnine göre filtrele.
+    ApplyFilter();
+}
+
+}

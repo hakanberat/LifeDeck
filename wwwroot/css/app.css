@@ -1,0 +1,15 @@
+/* Runtime states and startup screen; product styles live in lifedeck.css. */
+h1:focus { outline:none; }
+.valid.modified:not([type=checkbox]) { outline:1px solid var(--ld-success); }
+.invalid { outline:2px solid var(--ld-danger); }
+.validation-message { color:var(--ld-danger); }
+#blazor-error-ui { display:none; position:fixed; bottom:0; left:0; width:100%; z-index:1000; padding:16px 48px 16px 24px; background:var(--ld-danger-soft); color:var(--ld-danger); border-top:1px solid var(--ld-danger); }
+#blazor-error-ui .dismiss { position:absolute; right:18px; top:16px; cursor:pointer; }
+.blazor-error-boundary { padding:20px; background:var(--ld-danger-soft); color:var(--ld-danger); border-radius:var(--ld-radius); }
+.blazor-error-boundary::after { content:'An error has occurred.'; }
+.loading-progress { position:absolute; display:block; width:96px; height:96px; inset:30vh 0 auto; margin:auto; }
+.loading-progress circle { fill:none; stroke:var(--ld-border); stroke-width:3px; transform-origin:50% 50%; transform:rotate(-90deg); }
+.loading-progress circle:last-child { stroke:var(--ld-primary); stroke-dasharray:calc(3.141 * var(--blazor-load-percentage, 0%) * .8),500%; }
+.loading-progress-text { position:absolute; text-align:center; inset:calc(30vh + 110px) 0 auto; font-size:12px; color:var(--ld-muted); }
+.loading-progress-text::after { content:var(--blazor-load-percentage-text, 'Opening your workspace'); }
+code { color:var(--ld-primary); }

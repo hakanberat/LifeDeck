@@ -1,0 +1,207 @@
+
+@page "/calculator"
+@using System.Globalization
+@using LifeDeck.Services.Calculator
+@using Microsoft.AspNetCore.Components.Web
+
+<PageTitle>Calculator | LifeDeck</PageTitle>
+
+<section class="calculator-page">
+
+    <header class="calculator-header">
+        <h1>Calculator</h1>
+        <p>Calculate using C# and Blazor.</p>
+    </header>
+
+    <div class="calculator">
+
+        <label for="calc-display">Expression</label>
+
+        <input id="calc-display"
+               class="calculator-display"
+               type="text"
+               maxlength="120"
+               spellcheck="false"
+               autocomplete="off"
+               aria-label="Calculator expression"
+               @bind="expression"
+               @bind:event="oninput"
+               @bind:after="OnManualEdit"
+               @onkeydown="HandleKeyDown" />
+
+        @if (errorMessage is not null)
+        {
+            <p class="calculator-error" role="alert">
+                @errorMessage
+            </p>
+        }
+
+        <div class="calculator-keys">
+
+            @foreach (var key in Keys)
+            {
+                <button type="button"
+                        class="@GetKeyClass(key)"
+                        @key="key"
+                        @onclick="() => Press(key)">
+                    @key
+                </button>
+            }
+
+        </div>
+
+        <p class="calculator-hint">
+            You can also type an expression and press Enter.
+        </p>
+
+    </div>
+
+</section>
+
+@code {
+    private readonly CalculatorEngine engine = new();
+
+    private string expression = "0";
+    private string? errorMessage;
+    private bool justCalculated;
+
+    private static readonly string[] Keys =
+    {
+        "C", "(", ")", "⌫",
+        "7", "8", "9", "÷",
+        "4", "5", "6", "×",
+        "1", "2", "3", "−",
+        "0", ".", "+", "="
+    };
+
+    private static string GetKeyClass(string key)
+    {
+        return key switch
+        {
+            "=" => "calc-key equals",
+            "C" => "calc-key clear",
+            "⌫" => "calc-key utility",
+            "+" or "−" or "×" or "÷"
+                => "calc-key operator",
+            "(" or ")" => "calc-key utility",
+            _ => "calc-key"
+        };
+    }
+
+    private void OnManualEdit()
+    {
+        errorMessage = null;
+        justCalculated = false;
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            Calculate();
+    }
+
+    private void Press(string key)
+    {
+        errorMessage = null;
+
+        if (key == "C")
+        {
+            expression = "0";
+            justCalculated = false;
+            return;
+        }
+
+        if (key == "⌫")
+        {
+            expression = expression.Length > 1
+                ? expression[..^1]
+                : "0";
+
+            justCalculated = false;
+            return;
+        }
+
+        if (key == "=")
+        {
+            Calculate();
+            return;
+        }
+
+        if (expression.Length >= 120)
+        {
+            errorMessage = "Expression is too long.";
+            return;
+        }
+
+        if (key.Length == 1 && char.IsAsciiDigit(key[0]))
+        {
+            if (justCalculated || expression == "0")
+                expression = key;
+            else
+                expression += key;
+
+            justCalculated = false;
+            return;
+        }
+
+        if (key == ".")
+        {
+            if (justCalculated)
+                expression = "0";
+
+            justCalculated = false;
+
+            var lastNumber = expression.Split(
+                new[] { '+', '-', '−', '*', '×',
+                        '/', '÷', '(', ')' }
+            ).LastOrDefault() ?? "";
+
+            if (lastNumber.Contains('.') ||
+                lastNumber.Contains(','))
+                return;
+
+            if (lastNumber.Length == 0)
+                expression += "0";
+
+            expression += ".";
+            return;
+        }
+
+        if (justCalculated && key == "(")
+            expression = "(";
+        else if (expression == "0" && key == "(")
+            expression = "(";
+        else
+            expression += key;
+
+        justCalculated = false;
+    }
+
+    private void Calculate()
+    {
+        try
+        {
+            decimal result = engine.Evaluate(expression);
+
+            expression = result.ToString(
+                "0.############################",
+                CultureInfo.InvariantCulture
+            );
+
+            errorMessage = null;
+            justCalculated = true;
+        }
+        catch (DivideByZeroException)
+        {
+            errorMessage = "Division by zero is not allowed.";
+        }
+        catch (FormatException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (OverflowException)
+        {
+            errorMessage = "Number is too large.";
+        }
+    }
+}

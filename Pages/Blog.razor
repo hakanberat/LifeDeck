@@ -1,0 +1,443 @@
+
+@page "/blog"
+@using LifeDeck.Models
+@using LifeDeck.Services.Storage
+@using Microsoft.JSInterop
+@inject BrowserStorageService Storage
+@inject IJSRuntime JS
+
+<PageTitle>Blog | LifeDeck</PageTitle>
+
+<section class="blog-page">
+
+    <header class="blog-header">
+        <div>
+            <h1>Blog</h1>
+            <p>Write, organize and manage your personal posts.</p>
+        </div>
+
+        <button type="button"
+                class="primary-btn"
+                disabled="@saving"
+                @onclick="StartNewPost">
+            New Post
+        </button>
+    </header>
+
+    @if (errorMessage is not null)
+    {
+        <p class="error-message" role="alert">
+            @errorMessage
+        </p>
+    }
+
+    @if (formOpen)
+    {
+        <form class="blog-form"
+              @onsubmit="SavePostAsync"
+              @onsubmit:preventDefault>
+
+            <h2>@(editingId is null ? "New Post" : "Edit Post")</h2>
+
+            <label for="post-title">Title *</label>
+
+            <input id="post-title"
+                   type="text"
+                   maxlength="150"
+                   required
+                   disabled="@saving"
+                   @bind="title"
+                   @bind:event="oninput" />
+
+            <label for="post-content">Content *</label>
+
+            <textarea id="post-content"
+                      rows="12"
+                      maxlength="20000"
+                      required
+                      disabled="@saving"
+                      @bind="content"
+                      @bind:event="oninput"></textarea>
+
+            <label for="post-tags">Tags</label>
+
+            <input id="post-tags"
+                   type="text"
+                   maxlength="400"
+                   placeholder="Technology, Travel, Diving"
+                   disabled="@saving"
+                   @bind="tagInput"
+                   @bind:event="oninput" />
+
+            <small>
+                Separate tags with commas.
+                Maximum 10 tags, 30 characters each.
+            </small>
+
+            <div class="form-actions">
+
+                <button type="submit"
+                        class="primary-btn"
+                        disabled="@saving">
+                    @(saving ? "Saving..." : "Save Post")
+                </button>
+
+                <button type="button"
+                        class="secondary-btn"
+                        disabled="@saving"
+                        @onclick="CancelEdit">
+                    Cancel
+                </button>
+
+            </div>
+        </form>
+    }
+
+    <div class="blog-toolbar">
+
+        <input type="search"
+               placeholder="Search posts or tags..."
+               aria-label="Search blog posts"
+               @bind="searchText"
+               @bind:event="oninput" />
+
+        <span>@FilteredPosts.Count post(s)</span>
+
+    </div>
+
+    @if (loading)
+    {
+        <p role="status">Loading posts...</p>
+    }
+    else if (FilteredPosts.Count == 0)
+    {
+        <div class="empty-state">
+            <h3>No posts found</h3>
+            <p>Create your first post or change your search.</p>
+        </div>
+    }
+    else
+    {
+        <div class="blog-list">
+
+            @foreach (var post in FilteredPosts)
+            {
+                <article class="blog-card" @key="post.Id">
+
+                    <header class="post-header">
+
+                        <h2>@post.Title</h2>
+
+                        <time>
+                            Updated:
+                            @post.UpdatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        </time>
+
+                    </header>
+
+                    @if (post.Tags.Count > 0)
+                    {
+                        <div class="post-tags">
+                            @foreach (var tag in post.Tags)
+                            {
+                                <span class="post-tag">@tag</span>
+                            }
+                        </div>
+                    }
+
+                    <div class="post-content">
+                        @if (expandedPosts.Contains(post.Id))
+                        {
+                            @post.Content
+                        }
+                        else
+                        {
+                            @GetPreview(post.Content)
+                        }
+                    </div>
+
+                    @if (post.Content.Length > 250)
+                    {
+                        <button type="button"
+                                class="read-more"
+                                @onclick="() => ToggleExpanded(post.Id)">
+                            @(expandedPosts.Contains(post.Id)
+                                ? "Show Less"
+                                : "Read More")
+                        </button>
+                    }
+
+                    <footer class="post-footer">
+
+                        <span>
+                            Created:
+                            @post.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")
+                        </span>
+
+                        <div class="post-actions">
+
+                            <button type="button"
+                                    class="secondary-btn"
+                                    disabled="@saving"
+                                    @onclick="() => StartEdit(post)">
+                                Edit
+                            </button>
+
+                            <button type="button"
+                                    class="delete-btn"
+                                    disabled="@saving"
+                                    @onclick="() => DeletePostAsync(post)">
+                                Delete
+                            </button>
+
+                        </div>
+                    </footer>
+
+                </article>
+            }
+
+        </div>
+    }
+
+</section>
+
+@code {
+
+    private List<BlogPost> posts = new();
+
+    private readonly HashSet<Guid> expandedPosts = new();
+
+    private string title = string.Empty;
+    private string content = string.Empty;
+    private string tagInput = string.Empty;
+    private string searchText = string.Empty;
+
+    private Guid? editingId;
+
+    private bool loading = true;
+    private bool saving;
+    private bool formOpen;
+
+    private string? errorMessage;
+
+    // Search and sort posts
+    private List<BlogPost> FilteredPosts =>
+        posts
+            .Where(post =>
+                string.IsNullOrWhiteSpace(searchText) ||
+                post.Title.Contains(
+                    searchText.Trim(),
+                    StringComparison.OrdinalIgnoreCase) ||
+                post.Content.Contains(
+                    searchText.Trim(),
+                    StringComparison.OrdinalIgnoreCase) ||
+                post.Tags.Any(tag =>
+                    tag.Contains(
+                        searchText.Trim(),
+                        StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(post => post.UpdatedAt)
+            .ToList();
+
+    // Load posts
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        try
+        {
+            posts = await Storage.GetAsync<List<BlogPost>>(
+                StorageKeys.BlogPosts) ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to load posts.";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // New post
+    private void StartNewPost()
+    {
+        editingId = null;
+
+        title = string.Empty;
+        content = string.Empty;
+        tagInput = string.Empty;
+
+        errorMessage = null;
+        formOpen = true;
+    }
+
+    // Edit existing post
+    private void StartEdit(BlogPost post)
+    {
+        editingId = post.Id;
+
+        title = post.Title;
+        content = post.Content;
+        tagInput = string.Join(", ", post.Tags);
+
+        errorMessage = null;
+        formOpen = true;
+    }
+
+    private void CancelEdit()
+    {
+        editingId = null;
+
+        title = string.Empty;
+        content = string.Empty;
+        tagInput = string.Empty;
+
+        formOpen = false;
+    }
+
+    // Save new or edited post
+    private async Task SavePostAsync()
+    {
+        if (saving)
+            return;
+
+        var cleanTitle = title.Trim();
+        var cleanContent = content.Trim();
+
+        if (cleanTitle.Length == 0 ||
+            cleanTitle.Length > 150 ||
+            cleanContent.Length == 0 ||
+            cleanContent.Length > 20000)
+        {
+            errorMessage = "Please check the post details.";
+            return;
+        }
+
+        // Parse comma-separated tags
+        var tags = tagInput
+            .Split(
+                ',',
+                StringSplitOptions.RemoveEmptyEntries |
+                StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (tags.Count > 10 ||
+            tags.Any(tag => tag.Length > 30))
+        {
+            errorMessage =
+                "Use a maximum of 10 tags, 30 characters each.";
+            return;
+        }
+
+        var existing = editingId.HasValue
+            ? posts.FirstOrDefault(p => p.Id == editingId.Value)
+            : null;
+
+        if (editingId.HasValue && existing is null)
+        {
+            errorMessage = "Post not found.";
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        BlogPost entry = existing is null
+            ? new BlogPost
+            {
+                Title = cleanTitle,
+                Content = cleanContent,
+                Tags = tags,
+                UpdatedAt = now
+            }
+            : existing with
+            {
+                Title = cleanTitle,
+                Content = cleanContent,
+                Tags = tags,
+                UpdatedAt = now
+            };
+
+        var updated = existing is null
+            ? new List<BlogPost>(posts) { entry }
+            : posts.Select(p =>
+                p.Id == entry.Id ? entry : p).ToList();
+
+        if (await PersistAsync(updated))
+            CancelEdit();
+    }
+
+    // Delete post
+    private async Task DeletePostAsync(BlogPost post)
+    {
+        if (saving)
+            return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete post: {post.Title}?"
+        );
+
+        if (!confirmed)
+            return;
+
+        var updated = posts
+            .Where(p => p.Id != post.Id)
+            .ToList();
+
+        if (await PersistAsync(updated))
+        {
+            expandedPosts.Remove(post.Id);
+
+            if (editingId == post.Id)
+                CancelEdit();
+        }
+    }
+
+    // Persist to localStorage
+    private async Task<bool> PersistAsync(List<BlogPost> updated)
+    {
+        saving = true;
+
+        try
+        {
+            await Storage.SetAsync(
+                StorageKeys.BlogPosts,
+                updated
+            );
+
+            posts = updated;
+            errorMessage = null;
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to save posts.";
+            return false;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    // Expand or collapse post content
+    private void ToggleExpanded(Guid id)
+    {
+        if (!expandedPosts.Add(id))
+            expandedPosts.Remove(id);
+    }
+
+    // Generate a short preview
+    private static string GetPreview(string text)
+    {
+        return text.Length > 250
+            ? text[..250] + "..."
+            : text;
+    }
+}

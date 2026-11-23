@@ -1,0 +1,225 @@
+
+@page "/weather"
+@using LifeDeck.Models
+@using LifeDeck.Services.Api
+@inject WeatherService WeatherService
+
+<PageTitle>Weather | LifeDeck</PageTitle>
+
+<section class="weather-page">
+
+    <header class="weather-header">
+        <h1>Weather</h1>
+        <p>Current weather conditions around the world.</p>
+    </header>
+
+    <form class="weather-search"
+          @onsubmit="SearchLocationsAsync"
+          @onsubmit:preventDefault>
+
+        <input type="search"
+               placeholder="Enter a city..."
+               aria-label="Search city"
+               @bind="city"
+               @bind:event="oninput" />
+
+        <button type="submit" disabled="@loading">
+            Search
+        </button>
+    </form>
+
+    @if (loading)
+    {
+        <p role="status">Loading weather data...</p>
+    }
+
+    @if (errorMessage is not null)
+    {
+        <p class="weather-error" role="alert">
+            @errorMessage
+        </p>
+    }
+
+    @if (locations.Count > 0)
+    {
+        <section class="location-results">
+            <h2>Select Location</h2>
+
+            @foreach (var location in locations)
+            {
+                <button type="button"
+                        disabled="@loading"
+                        @onclick="() => SelectLocationAsync(location)">
+                    @location.Name
+                    @if (!string.IsNullOrWhiteSpace(location.Region))
+                    {
+                        <span> — @location.Region</span>
+                    }
+                    <span>, @location.Country</span>
+                </button>
+            }
+        </section>
+    }
+
+    @if (weather is not null && selectedLocation is not null)
+    {
+        <section class="weather-result">
+
+            <div class="weather-location">
+                <h2>@selectedLocation.Name, @selectedLocation.Country</h2>
+                <p>
+                    @GetDescription(weather.WeatherCode)
+                </p>
+                <small>
+                    Model time (local):
+                    @weather.LocalTime.Replace("T", " ")
+                </small>
+            </div>
+
+            <div class="weather-temperature">
+                @weather.TemperatureC.ToString("F1") °C
+            </div>
+
+            <div class="weather-grid">
+
+                <article class="weather-card">
+                    <span>Feels Like</span>
+                    <strong>@weather.FeelsLikeC.ToString("F1") °C</strong>
+                </article>
+
+                <article class="weather-card">
+                    <span>Humidity</span>
+                    <strong>@weather.Humidity%</strong>
+                </article>
+
+                <article class="weather-card">
+                    <span>Wind Speed</span>
+                    <strong>@weather.WindSpeedKmh.ToString("F1") km/h</strong>
+                </article>
+
+                <article class="weather-card">
+                    <span>Wind Direction</span>
+                    <strong>@weather.WindDirection°</strong>
+                </article>
+
+                <article class="weather-card">
+                    <span>Wind Gust</span>
+                    <strong>@weather.WindGustKmh.ToString("F1") km/h</strong>
+                </article>
+
+                <article class="weather-card">
+                    <span>Precipitation</span>
+                    <strong>@weather.PrecipitationMm.ToString("F1") mm</strong>
+                </article>
+
+                <article class="weather-card">
+                    <span>Pressure</span>
+                    <strong>@weather.PressureHpa.ToString("F1") hPa</strong>
+                </article>
+
+            </div>
+
+        </section>
+    }
+
+    <footer class="weather-footer">
+        Weather data provided by
+        <a href="https://open-meteo.com/"
+           target="_blank"
+           rel="noopener noreferrer">
+            Open-Meteo
+        </a>.
+    </footer>
+</section>
+
+@code {
+    private string city = string.Empty;
+    private string? errorMessage;
+
+    private bool loading;
+
+    private List<WeatherLocation> locations = new();
+
+    private WeatherLocation? selectedLocation;
+    private WeatherNow? weather;
+
+    private async Task SearchLocationsAsync()
+    {
+        if (loading) return;
+
+        if (city.Trim().Length < 2)
+        {
+            errorMessage = "Enter at least two characters.";
+            return;
+        }
+
+        loading = true;
+        errorMessage = null;
+        weather = null;
+        selectedLocation = null;
+        locations.Clear();
+
+        try
+        {
+            locations = await WeatherService.SearchCitiesAsync(city);
+
+            if (locations.Count == 0)
+            {
+                errorMessage = "No locations found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to search locations.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SelectLocationAsync(WeatherLocation location)
+    {
+        if (loading) return;
+
+        loading = true;
+        errorMessage = null;
+        weather = null;
+
+        try
+        {
+            var result =
+                await WeatherService.GetCurrentWeatherAsync(location);
+
+            selectedLocation = location;
+            weather = result;
+            locations.Clear();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            errorMessage = "Unable to retrieve weather data.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private static string GetDescription(int code) => code switch
+    {
+        0 => "Clear sky",
+        1 => "Mainly clear",
+        2 => "Partly cloudy",
+        3 => "Overcast",
+        45 or 48 => "Fog",
+        >= 51 and <= 57 => "Drizzle",
+        >= 61 and <= 67 => "Rain",
+        >= 71 and <= 77 => "Snow",
+        >= 80 and <= 82 => "Rain showers",
+        >= 85 and <= 86 => "Snow showers",
+        95 or 96 or 99 => "Thunderstorm",
+        _ => "Weather conditions unavailable"
+    };
+}
